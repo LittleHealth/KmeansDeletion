@@ -1,14 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import time
-
-
-def show_cluster(centers, assignments, data, title=""):
-    plt.subplot()
-    plt.scatter(x=data[:, 0], y=data[:, 1], c=assignments)
-    plt.scatter(x=centers[:, 0], y=centers[:, 1], c='k', marker='+', s=180)
-    plt.title(title)
-    plt.show()
 
 
 class Kmeans():
@@ -16,7 +6,7 @@ class Kmeans():
         self.k = k
         self.iters = iters
         self.n, self.d, self.data, self.centers, self.assignments, self.loss, self.centers_idx \
-            = 0, 0, None, None, None, [], []
+            = 1, 0, None, None, None, [], []
 
     def delete(self, del_idx):
         self.data = np.delete(self.data, del_idx, axis=0)
@@ -79,8 +69,20 @@ class Kmeans():
             # print(P.shape, centers)
         self.centers = np.array(centers)
 
-    def show(self, title):
-        show_cluster(self.centers, self.assignments, self.data, title)
+    def assign_cluster(self):
+        self.assignments = np.zeros(self.n).astype(int)
+        self.loss = 0
+        D = []
+        # 计算所有点到每个中心的距离
+        for center in self.centers:
+            d = np.linalg.norm(self.data - center, axis=1, ord=2)
+            D.append(d)
+        # 到哪个中心距离最短就属于哪个cluster
+        self.assignments = np.argmin(D, axis=0)
+        self.loss = np.sum(np.min(D, axis=0) ** 2) / self.n
+
+    # def show(self, title):
+    #     show_cluster(self.centers, self.assignments, self.data, title)
 
 
 class DCNode(Kmeans):
@@ -91,11 +93,17 @@ class DCNode(Kmeans):
         self.parent = None
         # 当前节点存储的数据
         self.node_data = []
-        self.data_prop = set()
+        self.data_idx = []
+
+    def run_node(self, d=None):
+        if d is not None:
+            self.d = d
+        self.run(np.array(self.node_data).reshape(-1, self.d))
 
 
 class DCKmeans():
     def __init__(self, ks, widths, iters=10):
+
         self.ks = ks
         self.widths = widths
         self.dc_tree = self.init_tree(ks, widths, iters)
@@ -104,14 +112,17 @@ class DCKmeans():
         self.data = dict()
         self.dels = set()
         self.centers = None
+        self.assignments = None
+        self.loss = None
         self.n, self.d = 0, 0
         self.height = len(self.dc_tree)
         for i in range(self.height):
             self.data[i] = None
 
-    def run(self, data, assignments=False):
-        self.n, self.d = data.shape
-        data_layer_size = self.n
+    def run(self, data, assignment=False):
+        self.data = np.array(data)
+        self.n, self.d = self.data.shape
+        # data_layer_size = self.n
         # 从height-1减到0，这是为了将储存数据的self.data[i]设置成相应的0矩阵
         # for i in range(self.height - 1, -1, -1):
         #     self.data[i] = np.zeros((data_layer_size, self.d))
@@ -125,10 +136,11 @@ class DCKmeans():
         for i in range(self.n):
             leaf_id = np.random.choice(num_leaves)
             # 维护划分表，记录每个数据点属于哪个叶子节点
-            # self.data_partion_table[i] = leaf_id
+            self.data_partion_table[i] = leaf_id
             # leaf维护自己当前存储的数据点
             leaf = self.dc_tree[-1][leaf_id]
-            leaf.node_data.append(data[i])
+            leaf.node_data.append(self.data[i])
+            leaf.data_idx.append(i)
             # 前面初始化过data[k]，此时将data[k]的第i行设置为第i个数据
             # self.data[self.height - 1][i] = data[i]
         for h in range(self.height - 1, -1, -1):
@@ -137,18 +149,28 @@ class DCKmeans():
                 # 对每层的数据节点进行训练聚类，然后依次让上层节点再进行训练
                 subproblem = self.dc_tree[h][w]
                 # 将当前高度height/层数level 进行聚类
-                subdata = np.array(subproblem.node_data)
-                subproblem.run(subdata)
-                if w == 1 or w % 8 == 0:
-                    subproblem.show(f"{h}th level, {w}th node")
+                # subdata = np.array(subproblem.node_data)
+                # subproblem.run(subdata)
+                subproblem.run_node(self.d)
+                # if w == 1 or w % 8 == 0:
+                #     subproblem.show(f"{h}th level, {w}th node")
                 if subproblem.parent is None:
                     # 到根节点了
                     self.centers = subproblem.centers
                 else:
                     # 将子节点的中心点加入到母节点的数据集中
-                    subproblem.parent.node_data.extend(subproblem.centers)
+                    subproblem.parent.node_data.append(subproblem.centers)
         # 如果要求assignments，退化到原始的Kmeans算法；所以每次都只是按照不返回assignments实验
-        return self.centers
+        if assignment is True:
+            assignment_solver = Kmeans(self.ks[0])
+            assignment_solver.data = self.data
+            assignment_solver.centers = self.centers
+            assignment_solver.assign_cluster()
+            self.assignments = assignment_solver.assignments
+            self.loss = assignment_solver.loss
+        if self.assignments is None:
+            self.assignments = np.zeros(self.n)
+        return self.centers, self.assignments, self.loss
 
     def init_tree(self, ks, widths, iters):
         print("init_tree:", ks, widths, iters)
@@ -169,26 +191,18 @@ class DCKmeans():
             tree.append(level)
         return tree
 
+    def delete(self, del_idx):
+        leaf_idx = self.data_partion_table[del_idx]
+        node = self.dc_tree[-1][leaf_idx]
+        node.data_idx.remove(del_idx)
+        node.node_data = self.data[list(node.data_idx)]
+        while True:
+            node.run_node()
+            if node.parent is None:
+                self.centers = node.centers
+                break
+            parent = node.parent
+            child_idx = parent.children.index(node)
+            parent.node_data[child_idx] = node.centers
+            node = parent
 
-def sample_gmm(params):
-    clusters = []
-    for param in params:
-        cluster = np.random.multivariate_normal(mean=param["mean"], cov=param["cov"], size=param["size"])
-        clusters.extend(cluster)
-    return np.array(clusters)
-
-
-N = 1000
-covariance = [[1, 0.1], [0.1, 1]]
-clusters_params = [{"mean": [-5, 5], "cov": covariance, "size": 5 * N},
-                   {"mean": [0, 0], "cov": covariance, "size": 5 * N},
-                   {"mean": [5, 5], "cov": covariance, "size": 5 * N},
-                   {"mean": [5, -5], "cov": covariance, "size": 5 * N},
-                   {"mean": [-5, -5], "cov": covariance, "size": 8 * N}]
-data = sample_gmm(clusters_params)
-# plt.scatter(x=data[:, 0], y=data[:, 1])
-dckmeans = DCKmeans([5, 5, 5], [1, 16, 128])
-centers = dckmeans.run(data.copy(), assignments=False)
-plt.scatter(x=data[:, 0], y=data[:, 1])
-plt.scatter(x=centers[:, 0], y=centers[:, 1], c='k', marker='+', s=180)
-plt.show()
