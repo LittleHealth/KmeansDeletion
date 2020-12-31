@@ -31,7 +31,7 @@ class QKmeans():
         self.gamma = gamma
 
 
-    def train(self,X):
+    def run(self, X):
         #设置数据
         self.data=X
         self.n=X.shape[0]
@@ -102,7 +102,7 @@ class QKmeans():
         self.loss = np.Infinity
         self.r_init_centroids = set()
         self.centroids_res = None
-        return self.train(self.data)
+        return self.run(self.data)
 
     def delete(self, del_idx):
         if not self._invariance(del_idx):

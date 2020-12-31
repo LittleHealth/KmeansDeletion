@@ -20,23 +20,12 @@ class Kmeans():
         self.init_centers()
         # 再根据中心点进行聚类
         for _ in range(self.iters):
-            self.assignments = np.zeros(self.n).astype(int)
-            loss = 0
-            D = []
-            # 计算所有点到每个中心的距离
-            for center in self.centers:
-                d = np.linalg.norm(data - center, axis=1, ord=2)
-                D.append(d)
-            # 到哪个中心距离最短就属于哪个cluster
-            self.assignments = np.argmin(D, axis=0)
-            # 损失函数的定义是
-            loss = np.sum(np.min(D, axis=0) ** 2) / self.n
+            self.assign_cluster()
             # 对每个聚类中心更新，使用聚类内所有点的平均值
             for i in range(self.k):
                 cluster = data[self.assignments == i]
                 self.centers[i] = np.sum(cluster, axis=0) / len(cluster)
                 # print("center:",self.centers[i])
-            self.loss.append(loss)
         return self.centers, self.assignments, self.loss
 
     def init_centers(self):
@@ -71,7 +60,7 @@ class Kmeans():
 
     def assign_cluster(self):
         self.assignments = np.zeros(self.n).astype(int)
-        self.loss = 0
+        loss = 0
         D = []
         # 计算所有点到每个中心的距离
         for center in self.centers:
@@ -79,7 +68,8 @@ class Kmeans():
             D.append(d)
         # 到哪个中心距离最短就属于哪个cluster
         self.assignments = np.argmin(D, axis=0)
-        self.loss = np.sum(np.min(D, axis=0) ** 2) / self.n
+        loss = np.sum(np.min(D, axis=0) ** 2) / self.n
+        self.loss.append(loss)
 
     # def show(self, title):
     #     show_cluster(self.centers, self.assignments, self.data, title)
@@ -144,7 +134,7 @@ class DCKmeans():
             # 前面初始化过data[k]，此时将data[k]的第i行设置为第i个数据
             # self.data[self.height - 1][i] = data[i]
         for h in range(self.height - 1, -1, -1):
-            print("h:", h)
+            # print("h:", h)
             for w in range(self.widths[h]):
                 # 对每层的数据节点进行训练聚类，然后依次让上层节点再进行训练
                 subproblem = self.dc_tree[h][w]
@@ -173,7 +163,7 @@ class DCKmeans():
         return self.centers, self.assignments, self.loss
 
     def init_tree(self, ks, widths, iters):
-        print("init_tree:", ks, widths, iters)
+        # print("init_tree:", ks, widths, iters)
         tree = [[DCNode(ks[0], iters)]]  # 根节点
         for i in range(1, len(widths)):
             k = ks[i]
@@ -194,6 +184,9 @@ class DCKmeans():
     def delete(self, del_idx):
         leaf_idx = self.data_partion_table[del_idx]
         node = self.dc_tree[-1][leaf_idx]
+        # 如果之前被删过就直接退出
+        if node.data_idx.count(del_idx) == 0:
+            return
         node.data_idx.remove(del_idx)
         node.node_data = self.data[list(node.data_idx)]
         while True:
