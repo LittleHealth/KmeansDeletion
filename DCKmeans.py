@@ -12,10 +12,14 @@ class Kmeans():
         self.data = np.delete(self.data, del_idx, axis=0)
         return self.run(self.data)
 
-    def run(self, data):
+    def set_data(self, data):
         self.n, self.d = data.shape
-        self.data, self.centers, self.assignments, self.loss, self.centers_idx \
-            = data, None, None, [], []
+        self.data = data
+
+    def run(self, data):
+        self.set_data(data)
+        self.centers, self.assignments, self.loss, self.centers_idx \
+            = None, None, [], []
         # 先找中心点
         self.init_centers()
         # 再根据中心点进行聚类
@@ -60,7 +64,6 @@ class Kmeans():
 
     def assign_cluster(self):
         self.assignments = np.zeros(self.n).astype(int)
-        loss = 0
         D = []
         # 计算所有点到每个中心的距离
         for center in self.centers:
@@ -68,8 +71,7 @@ class Kmeans():
             D.append(d)
         # 到哪个中心距离最短就属于哪个cluster
         self.assignments = np.argmin(D, axis=0)
-        loss = np.sum(np.min(D, axis=0) ** 2) / self.n
-        self.loss.append(loss)
+        self.loss = np.sum(np.min(D, axis=0) ** 2) / self.n
 
     # def show(self, title):
     #     show_cluster(self.centers, self.assignments, self.data, title)
@@ -153,7 +155,7 @@ class DCKmeans():
         # 如果要求assignments，退化到原始的Kmeans算法；所以每次都只是按照不返回assignments实验
         if assignment is True:
             assignment_solver = Kmeans(self.ks[0])
-            assignment_solver.data = self.data
+            assignment_solver.set_data(self.data)
             assignment_solver.centers = self.centers
             assignment_solver.assign_cluster()
             self.assignments = assignment_solver.assignments
