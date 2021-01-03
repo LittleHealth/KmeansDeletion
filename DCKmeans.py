@@ -5,16 +5,16 @@ class Kmeans():
     def __init__(self, k, iters=10):
         self.k = k
         self.iters = iters
-        self.n, self.d, self.data, self.centers, self.assignments, self.loss, self.centers_idx \
+        self.n, self.d, self._data, self.centers, self.assignments, self.loss, self.centers_idx \
             = 1, 0, None, None, None, [], []
 
     def delete(self, del_idx):
-        self.data = np.delete(self.data, del_idx, axis=0)
-        return self.run(self.data)
+        self._data = np.delete(self._data, del_idx, axis=0)
+        return self.run(self._data)
 
     def set_data(self, data):
         self.n, self.d = data.shape
-        self.data = data
+        self._data = data
 
     def run(self, data):
         self.set_data(data)
@@ -36,14 +36,14 @@ class Kmeans():
         # 随机找到一个中心点
         idx = np.random.choice(self.n)
         self.centers_idx.append(idx)
-        # print(type(self.data))
-        # print(self.data[idx, :])
-        centers = [self.data[idx, :]]
+        # print(type(self._data))
+        # print(self._data[idx, :])
+        centers = [self._data[idx, :]]
         for i in range(1, self.k):
             D = []
             for center in centers:
                 # 计算每个点到这个聚类中心的距离
-                d = np.linalg.norm(self.data - center, axis=1, ord=2)
+                d = np.linalg.norm(self._data - center, axis=1, ord=2)
                 # d = np.sum((data - center)**2, axis = 1)
                 D.append(d)
             # 一个很严重的问题，numpy的数组操作好多都没有，我该怎么用呢？
@@ -58,7 +58,7 @@ class Kmeans():
             # 直接把距离最大的给筛选出来，是否需要在距离前几名中进行随机选取？，不然会导致噪声影响太大
             next_idx = np.argmax(P)
             self.centers_idx.append(next_idx)
-            centers.append(self.data[next_idx, :])
+            centers.append(self._data[next_idx, :])
             # print(P.shape, centers)
         self.centers = np.array(centers)
 
@@ -67,14 +67,14 @@ class Kmeans():
         D = []
         # 计算所有点到每个中心的距离
         for center in self.centers:
-            d = np.linalg.norm(self.data - center, axis=1, ord=2)
+            d = np.linalg.norm(self._data - center, axis=1, ord=2)
             D.append(d)
         # 到哪个中心距离最短就属于哪个cluster
         self.assignments = np.argmin(D, axis=0)
         self.loss = np.sum(np.min(D, axis=0) ** 2) / self.n
 
     # def show(self, title):
-    #     show_cluster(self.centers, self.assignments, self.data, title)
+    #     show_cluster(self.centers, self.assignments, self._data, title)
 
 
 class DCNode(Kmeans):
@@ -95,12 +95,14 @@ class DCNode(Kmeans):
 
 class DCKmeans():
     def __init__(self, ks, widths, iters=10):
-
+        self.iters = iters
         self.ks = ks
         self.widths = widths
         self.dc_tree = self.init_tree(ks, widths, iters)
 
         self.data_partion_table = dict()
+        self.valid_ids = []
+        self._data = dict()
         self.data = dict()
         self.dels = set()
         self.centers = None
@@ -109,16 +111,35 @@ class DCKmeans():
         self.n, self.d = 0, 0
         self.height = len(self.dc_tree)
         for i in range(self.height):
-            self.data[i] = None
+            self._data[i] = None
+
+    def init_data(self):
+        self.dc_tree = self.init_tree(self.ks, self.widths, self.iters)
+
+        self.data_partion_table = dict()
+        self.valid_ids = []
+        self._data = dict()
+        self.data = dict()
+        self.dels = set()
+        self.centers = None
+        self.assignments = None
+        self.loss = None
+        self.n, self.d = 0, 0
+        self.height = len(self.dc_tree)
+        for i in range(self.height):
+            self._data[i] = None
 
     def run(self, data, assignment=False):
-        self.data = np.array(data)
-        self.n, self.d = self.data.shape
+        self.init_data()
+        self._data = np.array(data)
+        self.data = self._data
+        self.n, self.d = self._data.shape
+        self.valid_ids = list(range(self.n))
         # data_layer_size = self.n
         # 从height-1减到0，这是为了将储存数据的self.data[i]设置成相应的0矩阵
         # for i in range(self.height - 1, -1, -1):
-        #     self.data[i] = np.zeros((data_layer_size, self.d))
-        #     print(f"self.data[{i}].shape:{self.data[i].shape}; data.shape")
+        #     self._data[i] = np.zeros((data_layer_size, self.d))
+        #     print(f"self._data[{i}].shape:{self._data[i].shape}; data.shape")
         #     data_layer_size = self.ks[i] * self.widths[i]
         #
         num_leaves = len(self.dc_tree[-1])
@@ -131,10 +152,10 @@ class DCKmeans():
             self.data_partion_table[i] = leaf_id
             # leaf维护自己当前存储的数据点
             leaf = self.dc_tree[-1][leaf_id]
-            leaf.node_data.append(self.data[i])
+            leaf.node_data.append(self._data[i])
             leaf.data_idx.append(i)
             # 前面初始化过data[k]，此时将data[k]的第i行设置为第i个数据
-            # self.data[self.height - 1][i] = data[i]
+            # self._data[self.height - 1][i] = data[i]
         for h in range(self.height - 1, -1, -1):
             # print("h:", h)
             for w in range(self.widths[h]):
@@ -155,7 +176,7 @@ class DCKmeans():
         # 如果要求assignments，退化到原始的Kmeans算法；所以每次都只是按照不返回assignments实验
         if assignment is True:
             assignment_solver = Kmeans(self.ks[0])
-            assignment_solver.set_data(self.data)
+            assignment_solver.set_data(self._data)
             assignment_solver.centers = self.centers
             assignment_solver.assign_cluster()
             self.assignments = assignment_solver.assignments
@@ -184,13 +205,14 @@ class DCKmeans():
         return tree
 
     def delete(self, del_idx):
+        self.data = np.delete(self.data, del_idx, 0)
         leaf_idx = self.data_partion_table[del_idx]
         node = self.dc_tree[-1][leaf_idx]
         # 如果之前被删过就直接退出
         if node.data_idx.count(del_idx) == 0:
             return
         node.data_idx.remove(del_idx)
-        node.node_data = self.data[list(node.data_idx)]
+        node.node_data = self._data[list(node.data_idx)]
         while True:
             node.run_node()
             if node.parent is None:
