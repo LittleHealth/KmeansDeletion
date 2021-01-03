@@ -176,7 +176,7 @@ class DCKmeans():
         # 如果要求assignments，退化到原始的Kmeans算法；所以每次都只是按照不返回assignments实验
         if assignment is True:
             assignment_solver = Kmeans(self.ks[0])
-            assignment_solver.set_data(self._data)
+            assignment_solver.set_data(self.data)
             assignment_solver.centers = self.centers
             assignment_solver.assign_cluster()
             self.assignments = assignment_solver.assignments
@@ -217,9 +217,16 @@ class DCKmeans():
             node.run_node()
             if node.parent is None:
                 self.centers = node.centers
+                assignment_solver = Kmeans(self.ks[0])
+                assignment_solver.set_data(self.data)
+                assignment_solver.centers = self.centers
+                assignment_solver.assign_cluster()
+                self.assignments = assignment_solver.assignments
+                self.loss = assignment_solver.loss
                 break
             parent = node.parent
             child_idx = parent.children.index(node)
             parent.node_data[child_idx] = node.centers
             node = parent
+        self.n -= 1
 

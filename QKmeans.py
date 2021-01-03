@@ -108,6 +108,7 @@ class QKmeans():
         if not self._invariance(del_idx):
             return self.directly_delete(del_idx)
         else:
+            print("haha")
             return self.centroids_res, self.clusters_res, self.min_loss
 
     def _clustering(self):
