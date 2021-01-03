@@ -217,6 +217,12 @@ class DCKmeans():
             node.run_node()
             if node.parent is None:
                 self.centers = node.centers
+                assignment_solver = Kmeans(self.ks[0])
+                assignment_solver.set_data(self.data)
+                assignment_solver.centers = self.centers
+                assignment_solver.assign_cluster()
+                self.assignments = assignment_solver.assignments
+                self.loss = assignment_solver.loss
                 break
             parent = node.parent
             child_idx = parent.children.index(node)
