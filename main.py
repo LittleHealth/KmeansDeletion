@@ -1,44 +1,48 @@
-from DCKmeans import DCKmeans, Kmeans
-from QKmeans import QKmeans
-from utils import *
+import pandas as pd
+import numpy as np
+import random
+from evaluation import *
 
+# run this code to test evaluate
 
-def main(N=100, K=3):
-    # covariance = [[1, 0.1], [0.1, 1]]
-    covariance = [[0.5, 0], [0, 0.5]]
-    # clusters_params = [{"mean": [-5, 5], "cov": covariance, "size": 5 * N},
-    #                    {"mean": [0, 0], "cov": covariance, "size": 5 * N},
-    #                    {"mean": [5, 5], "cov": covariance, "size": 5 * N},
-    #                    {"mean": [5, -5], "cov": covariance, "size": 5 * N},
-    #                    {"mean": [-5, -5], "cov": covariance, "size": 8 * N}]
-    clusters_params = [{"mean": [2, 0], "cov": covariance, "size": 5 * N},
-                       {"mean": [0, 2], "cov": covariance, "size": 5 * N},
-                       {"mean": [-1.5, -1.5], "cov": covariance, "size": 8 * N}]
-    data = sample_gmm(clusters_params)
-    # plt.scatter(x=data[:, 0], y=data[:, 1])
-    kmeans = Kmeans(K, 20)
-    centers, assignments, _ = kmeans.run(data)
-    show_cluster(centers, assignments, data, "Kmeans")
+# data of celltype
+celltype_data = pd.read_csv('./data/celltype.csv')
+cols = celltype_data.columns
+col1 = cols[0:-2]
+data = celltype_data[col1]
+data = np.array(data)
+real_labels = np.array(celltype_data[cols[-1]])  # tissue
+k = 10  # change k smaller if the code throws error
 
-    dckmeans = DCKmeans([K, K, K], [1, 16, 128])
-    centers, assignments, _ = dckmeans.run(data, assignment=True)
-    show_cluster(centers, assignments, data, "DCKmeans")
+# data of covtype
+# covtype_data = pd.read_csv('./data/covtype.csv')
+# cols = covtype_data.columns
+# col1 = cols[0:-1]
+# data = covtype_data[col1]
+# data = np.array(data)
+# real_labels = np.array(covtype_data[cols[-1]])  # type
+# k = 7  # change k smaller if the code throws error
 
-    qkmeans = QKmeans(K, 0.05)
-    centers, assignments, _ = qkmeans.run(data)
-    show_cluster(centers, assignments, data, "QKmeans")
+# uncomment one of above paragraphs to get data
 
-    DEL_NUM = 10
+samples = random.sample(range(data.shape[0]), 10000)
+data = data[samples, :]
+real_labels = real_labels[samples]
 
-    print('Simulation deletion stream for kmeans')
-    online_deletion_stream(DEL_NUM, kmeans)
+evaluate = evaluation(data, real_labels, k, DEL_NUM=100)
 
-    print('Simulation deletion stream for dckmeans')
-    online_deletion_stream(DEL_NUM, dckmeans)
+# 初始的训练
+evaluate.run()
 
-    print('Simulation deletion stream for qkmeans')
-    online_deletion_stream(DEL_NUM, qkmeans)
+# 测试三种算法基础效果
+print("--------------------------------")
+evaluate.test_basic()
+print("--------------------------------")
 
+# 测试删除效果
+evaluate.test_deletion()
+print("--------------------------------")
 
-if __name__ == "__main__":
-    main(1000, 3)
+# 测试删除时间
+evaluate.test_deletion_time()
+print("--------------------------------")
